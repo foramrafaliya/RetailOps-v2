@@ -52,7 +52,38 @@
             </span>
           </div>
           {{ end }}
+          
+                    <!-- ===== STOCK STATUS ===== -->
+          <div style="margin: 15px 0; padding: 12px; border-radius: 8px;
+            {{ if gt $.stock_quantity 20 }}
+              background: #e8f5e9; border: 1px solid #a5d6a7;
+            {{ else if gt $.stock_quantity 0 }}
+              background: #fff3e0; border: 1px solid #ffcc80;
+            {{ else }}
+              background: #ffebee; border: 1px solid #ef9a9a;
+            {{ end }}
+          ">
+            {{ if gt $.stock_quantity 20 }}
+              <span style="color: #2e7d32; font-weight: bold; font-size: 15px;">
+                ✅ In Stock — {{ $.stock_quantity }} available
+              </span>
+            {{ else if gt $.stock_quantity 0 }}
+              <span style="color: #e65100; font-weight: bold; font-size: 15px;">
+                ⚠️ Low Stock — Only {{ $.stock_quantity }} left!
+              </span>
+            {{ else if eq $.stock_quantity 0 }}
+              <span style="color: #c62828; font-weight: bold; font-size: 15px;">
+                ❌ Out of Stock
+              </span>
+            {{ else }}
+              <span style="color: #888; font-size: 14px;">
+                📦 Stock info unavailable
+              </span>
+            {{ end }}
+          </div>
+          <!-- ===== END STOCK STATUS ===== -->
 
+          <form method="POST" action="{{ $.baseUrl }}/cart">
           <form method="POST" action="{{ $.baseUrl }}/cart">
             <input type="hidden" name="product_id" value="{{$.product.Item.Id}}" />
             <div class="product-quantity-dropdown">
@@ -72,6 +103,91 @@
       </div>
     </div>
   </div>
+
+  <!-- ===== REVIEWS SECTION START ===== -->
+  <div class="container" style="margin-top: 30px; margin-bottom: 30px;">
+
+    <!-- Average Rating Box -->
+    <div style="background: #f8f9fa; border-radius: 10px; padding: 20px; margin-bottom: 20px;">
+      <h3 style="margin: 0 0 15px 0; color: #333; font-size: 20px;">⭐ Customer Reviews</h3>
+      <div style="display: flex; align-items: center; gap: 15px;">
+        <span style="font-size: 36px; font-weight: bold; color: #FF9800;">
+          {{ if $.avg_rating }}{{ $.avg_rating }}{{ else }}0{{ end }}
+        </span>
+        <span style="font-size: 18px; color: #888;">
+          out of 5
+        </span>
+        <span style="color: #aaa; font-size: 14px;">
+          ({{ if $.total_reviews }}{{ $.total_reviews }}{{ else }}0{{ end }} reviews)
+        </span>
+      </div>
+    </div>
+
+    <!-- Reviews List -->
+    {{ if $.reviews }}
+      {{ range $.reviews }}
+      <div style="background: white; border: 1px solid #e8e8e8; border-left: 4px solid #6C63FF; border-radius: 8px; padding: 15px 20px; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+          <strong style="color: #333; font-size: 15px;">👤 {{ .User }}</strong>
+          <span style="color: #FFD700; font-size: 16px;">
+            {{ if eq .Rating 5 }}★★★★★{{ end }}
+            {{ if eq .Rating 4 }}★★★★☆{{ end }}
+            {{ if eq .Rating 3 }}★★★☆☆{{ end }}
+            {{ if eq .Rating 2 }}★★☆☆☆{{ end }}
+            {{ if eq .Rating 1 }}★☆☆☆☆{{ end }}
+          </span>
+        </div>
+        <p style="color: #555; margin: 0 0 5px 0; font-size: 14px;">{{ .Comment }}</p>
+        <small style="color: #bbb;">📅 {{ .CreatedAt }}</small>
+      </div>
+      {{ end }}
+    {{ else }}
+      <div style="background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; padding: 25px; text-align: center; margin-bottom: 12px;">
+        <p style="color: #999; margin: 0;">No reviews yet. Be the first to review! 👇</p>
+      </div>
+    {{ end }}
+
+    <!-- Add Review Form -->
+    <div style="background: white; border: 1px solid #e8e8e8; border-radius: 10px; padding: 25px; margin-top: 10px;">
+      <h4 style="margin: 0 0 20px 0; color: #333; font-size: 18px;">✍️ Write a Review</h4>
+
+      <form action="{{ $.baseUrl }}/review/submit" method="POST">
+        <input type="hidden" name="product_id" value="{{ $.product.Item.Id }}">
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #444; font-size: 14px;">Your Name</label>
+          <input type="text" name="user" required placeholder="Enter your name"
+            style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #444; font-size: 14px;">Rating</label>
+          <select name="rating"
+            style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            <option value="5">★★★★★ (5 - Excellent)</option>
+            <option value="4">★★★★☆ (4 - Good)</option>
+            <option value="3" selected>★★★☆☆ (3 - Average)</option>
+            <option value="2">★★☆☆☆ (2 - Poor)</option>
+            <option value="1">★☆☆☆☆ (1 - Terrible)</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+          <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #444; font-size: 14px;">Your Review</label>
+          <textarea name="comment" required rows="3" placeholder="Share your experience with this product..."
+            style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; box-sizing: border-box; resize: vertical;"></textarea>
+        </div>
+
+        <button type="submit"
+          style="width: 100%; padding: 12px; background: #6C63FF; color: white; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer;">
+          🚀 Submit Review
+        </button>
+      </form>
+    </div>
+
+  </div>
+  <!-- ===== REVIEWS SECTION END ===== -->
+
   <div>
     {{ if $.recommendations}}
       {{ template "recommendations" $ }}

@@ -42,7 +42,8 @@ spec:
                 - ALL
             privileged: false
             readOnlyRootFilesystem: true
-          image: checkoutservice
+          image: retailops-checkout:v1
+          imagePullPolicy: Never
           ports:
           - containerPort: 5050
           readinessProbe:

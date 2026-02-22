@@ -194,6 +194,11 @@ func (fe *frontendServer) productHandler(w http.ResponseWriter, r *http.Request)
 			fmt.Println("Failed to obtain product's packaging info:", err)
 		}
 	}
+    reviewData := fetchReviews(id)
+	log.WithField("product", id).WithField("reviews", reviewData.TotalReviews).Info("fetched reviews")
+
+	inventoryData := fetchInventory(id)
+    log.WithField("product", id).WithField("stock", inventoryData.Quantity).Info("fetched inventory")
 
 	if err := templates.ExecuteTemplate(w, "product", injectCommonTemplateData(r, map[string]interface{}{
 		"ad":              fe.chooseAd(r.Context(), p.Categories, log),
@@ -203,6 +208,11 @@ func (fe *frontendServer) productHandler(w http.ResponseWriter, r *http.Request)
 		"recommendations": recommendations,
 		"cart_size":       cartSize(cart),
 		"packagingInfo":   packagingInfo,
+		"reviews":         reviewData.Reviews,
+        "avg_rating":      reviewData.AvgRating,
+        "total_reviews":   reviewData.TotalReviews,
+		"stock_quantity":  inventoryData.Quantity,
+        "stock_name":     inventoryData.Name,
 	})); err != nil {
 		log.Println(err)
 	}
@@ -373,6 +383,19 @@ func (fe *frontendServer) placeOrderHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	log.WithField("order", order.GetOrder().GetOrderId()).Info("order placed")
+    
+	 // ===== REDUCE INVENTORY FOR EACH ITEM =====
+        for _, item := range order.GetOrder().GetItems() {
+                productID := item.GetItem().GetProductId()
+                quantity := int(item.GetItem().GetQuantity())
+                err := reduceInventory(productID, quantity)
+                if err != nil {
+                        log.WithField("product", productID).WithField("error", err).Warn("failed to reduce inventory")
+                } else {
+                        log.WithField("product", productID).WithField("quantity", quantity).Info("inventory reduced")
+                }
+        }
+        // ===== END REDUCE INVENTORY =====
 
 	order.GetOrder().GetItems()
 	recommendations, _ := fe.getRecommendations(r.Context(), sessionID(r), nil)
@@ -632,4 +655,36 @@ func stringinSlice(slice []string, val string) bool {
 		}
 	}
 	return false
+}	
+func (fe *frontendServer) submitReviewHandler(w http.ResponseWriter, r *http.Request) {
+	log := r.Context().Value(ctxKeyLog{}).(logrus.FieldLogger)
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad request", 400)
+		return
+	}
+
+	productID := r.FormValue("product_id")
+	user := r.FormValue("user")
+	comment := r.FormValue("comment")
+	ratingStr := r.FormValue("rating")
+
+	rating := 5
+	fmt.Sscanf(ratingStr, "%d", &rating)
+
+	err := submitReviewToService(productID, user, rating, comment)
+	if err != nil {
+		log.WithField("error", err).Error("failed to submit review")
+	} else {
+		log.WithField("product", productID).WithField("user", user).Info("review submitted")
+	}
+
+	w.Header().Set("Location", baseUrl+"/product/"+productID)
+	w.WriteHeader(http.StatusFound)
 }
+

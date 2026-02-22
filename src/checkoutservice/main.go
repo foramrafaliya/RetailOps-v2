@@ -17,9 +17,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net"
+	"bytes"
 	"os"
 	"time"
+	"encoding/json"
 
 	"cloud.google.com/go/profiler"
 	"github.com/google/uuid"
@@ -84,7 +87,28 @@ type checkoutService struct {
 	paymentSvcAddr string
 	paymentSvcConn *grpc.ClientConn
 }
+func checkInventory(productID string, quantity int) error {
+    url := "http://inventoryservice:8081/reduce"
 
+    body := map[string]interface{}{
+        "productId": productID,
+        "quantity":  quantity,
+    }
+
+    jsonData, _ := json.Marshal(body)
+
+    resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusOK {
+        return fmt.Errorf("inventory error")
+    }
+
+    return nil
+}
 func main() {
 	ctx := context.Background()
 	if os.Getenv("ENABLE_TRACING") == "1" {
@@ -234,6 +258,13 @@ func (cs *checkoutService) PlaceOrder(ctx context.Context, req *pb.PlaceOrderReq
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to generate order uuid")
 	}
+
+	for _, item := range items {
+    err := checkInventory(item.ProductId, int(item.Quantity))
+    if err != nil {
+        return nil, status.Errorf(codes.FailedPrecondition, "stock not available")
+    }
+}
 
 	prep, err := cs.prepareOrderItemsAndShippingQuoteFromCart(ctx, req.UserId, req.UserCurrency, req.Address)
 	if err != nil {
