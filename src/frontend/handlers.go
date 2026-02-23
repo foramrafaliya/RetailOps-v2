@@ -637,6 +637,7 @@ func renderCurrencyLogo(currencyCode string) string {
 		"CAD": "$",
 		"JPY": "¥",
 		"EUR": "€",
+		"INR": "₹",
 		"TRY": "₺",
 		"GBP": "£",
 	}
