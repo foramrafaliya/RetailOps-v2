@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline - Currency Service
 
 on:
   push:
@@ -9,10 +9,10 @@ on:
 jobs:
 
   # ================================
-  # JOB 1: Build and Push Images
+  # STAGE 1: Build Currency Service
   # ================================
-  build-and-push:
-    name: Build & Push Docker Images
+  build-currency-service:
+    name: Build Currency Service
     runs-on: ubuntu-latest
 
     steps:
@@ -25,80 +25,52 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & Push Review Service
+      - name: Build & Push Currency Service
         uses: docker/build-push-action@v5
         with:
-          context: ./src/reviewservice
+          context: ./src/currencyservice
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/reviewservice:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/reviewservice:${{ github.sha }}
-
-      - name: Build & Push Inventory Service
-        uses: docker/build-push-action@v5
-        with:
-          context: ./src/inventoryservice
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/inventoryservice:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/inventoryservice:${{ github.sha }}
-
-      - name: Build & Push Frontend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./src/frontend
-          push: true
-          tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/currencyservice:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/currencyservice:${{ github.sha }}
 
   # ================================
-  # JOB 2: Security Scan
+  # STAGE 2: Security Scan
   # ================================
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: build-currency-service
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Scan Review Service
+      - name: Scan Currency Service
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/reviewservice:latest'
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
-
-      - name: Scan Inventory Service
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/inventoryservice:latest'
+          image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/currencyservice:latest'
           format: 'table'
           severity: 'CRITICAL,HIGH'
 
   # ================================
-  # JOB 3: Deploy Summary
+  # STAGE 3: Pipeline Report
   # ================================
-  deploy-summary:
-    name: Pipeline Summary
+  pipeline-report:
+    name: Pipeline Report
     runs-on: ubuntu-latest
-    needs: [build-and-push, security-scan]
+    needs: [build-currency-service, security-scan]
     if: always()
 
     steps:
-      - name: Pipeline Result
+      - name: Summary
         run: |
-          echo "=================================="
-          echo "  CI/CD PIPELINE COMPLETE! 🎉"
-          echo "=================================="
-          echo ""
-          echo "Build:    ${{ needs.build-and-push.result }}"
-          echo "Security: ${{ needs.security-scan.result }}"
-          echo ""
-          echo "Images pushed to Docker Hub:"
-          echo "  - reviewservice:${{ github.sha }}"
-          echo "  - inventoryservice:${{ github.sha }}"
-          echo "  - frontend:${{ github.sha }}"
-          echo "=================================="
+          echo "╔═══════════════════════════════════════════╗"
+          echo "║   CURRENCY SERVICE CI/CD COMPLETE! 🎉    ║"
+          echo "╠═══════════════════════════════════════════╣"
+          echo "║                                           ║"
+          echo "║  Build:     ${{ needs.build-currency-service.result }}"
+          echo "║  Security:  ${{ needs.security-scan.result }}"
+          echo "║                                           ║"
+          echo "║  🇮🇳 INR (Indian Rupee) Support Added!    ║"
+          echo "║                                           ║"
+          echo "║  Image: currencyservice:${{ github.sha }}"
+          echo "║                                           ║"
+          echo "╚═══════════════════════════════════════════╝"
