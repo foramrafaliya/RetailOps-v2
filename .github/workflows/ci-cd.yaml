@@ -108,21 +108,36 @@ jobs:
 
       - name: Update Image Tags
         run: |
+          # 1. Setup Git User
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           
+          # 2. Force Pull (to avoid conflicts)
+          git pull origin main
+          
           echo "Updating manifests to tag: ${{ github.sha }}"
           
-          # Update ONLY the 4 services we built
+          # 3. Use generic sed (safest way)
+          # Updates ANY image starting with your username/frontend
           sed -i "s|image: ${{ secrets.DOCKERHUB_USERNAME }}/frontend:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ github.sha }}|g" kubernetes-manifests/frontend.yaml
+          
+          # Do same for others
           sed -i "s|image: ${{ secrets.DOCKERHUB_USERNAME }}/reviewservice:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/reviewservice:${{ github.sha }}|g" kubernetes-manifests/reviewservice.yaml
           sed -i "s|image: ${{ secrets.DOCKERHUB_USERNAME }}/inventoryservice:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/inventoryservice:${{ github.sha }}|g" kubernetes-manifests/inventoryservice.yaml
           sed -i "s|image: ${{ secrets.DOCKERHUB_USERNAME }}/currencyservice:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/currencyservice:${{ github.sha }}|g" kubernetes-manifests/currencyservice.yaml
           
-          # Commit & Push
+          # 4. Debug: Check if file actually changed
+          git status
+          
+          # 5. Commit & Push
           git add kubernetes-manifests/
-          git diff --staged --quiet || git commit -m "ops: update modified service images to ${{ github.sha }} [skip ci]"
-          git push
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "ops: update modified service images to ${{ github.sha }} [skip ci]"
+            git push origin main
+          fi  
 
   # ================================
   # STAGE 5: Security Scan
