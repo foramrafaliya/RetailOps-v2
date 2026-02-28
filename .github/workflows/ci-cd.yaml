@@ -9,6 +9,10 @@ on:
 env:
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
+permissions:
+  contents: write
+
+
 jobs:
 
   # ================================
