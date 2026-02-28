@@ -42,8 +42,8 @@ spec:
                 - ALL
             privileged: false
             readOnlyRootFilesystem: true
-          image: retailops-checkout:v1
-          imagePullPolicy: Never
+          image: gcr.io/google-samples/microservices-demo/checkoutservice:v0.10.1
+          imagePullPolicy: IfNotPresent
           ports:
           - containerPort: 5050
           readinessProbe:

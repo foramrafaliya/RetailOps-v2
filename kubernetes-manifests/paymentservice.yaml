@@ -43,7 +43,8 @@ spec:
               - ALL
           privileged: false
           readOnlyRootFilesystem: true
-        image: gcr.io/google-samples/microservices-demo/paymentservice:v0.10.0
+        image: paymentservice:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 50051
         env:

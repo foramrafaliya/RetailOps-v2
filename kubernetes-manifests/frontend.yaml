@@ -44,7 +44,7 @@ spec:
                 - ALL
             privileged: false
             readOnlyRootFilesystem: true
-          image: retailops-frontend:v1
+          image: frontend:latest
           imagePullPolicy: Never
 
           ports:
