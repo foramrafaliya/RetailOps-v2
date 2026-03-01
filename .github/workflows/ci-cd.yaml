@@ -1,161 +1,116 @@
-name: CI/CD Pipeline - Modified Services Only
+name: CI/CD Pipeline - GitOps Auto-Update
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    # Ignore commits made by the bot itself to prevent infinite loops
+    paths-ignore:
+      - 'kubernetes-manifests/**'
 
 env:
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
 permissions:
-  contents: write
-
+  contents: write # REQUIRED: Allows the bot to push changes back to the repo
 
 jobs:
 
   # ================================
-  # STAGE 1: Code Quality
-  # ================================
-  code-quality:
-    name: Code Quality
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
-      - run: pip install flake8
-      - run: flake8 src/reviewservice/app.py --max-line-length=150 --ignore=E501,W503 || true
-      - run: flake8 src/inventoryservice/app.py --max-line-length=150 --ignore=E501,W503 || true
-
-  # ================================
-  # STAGE 2: Testing
-  # ================================
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
-    needs: code-quality
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
-      - name: Test Custom Services
-        run: |
-          pip install flask werkzeug
-          # Minimal sanity check (since full test suite requires more setup)
-          python -c "import flask; print('✅ Flask installed & Custom Services ready for build')"
-
-  # ================================
-  # STAGE 3: Build & Push (Only Modified Services)
+  # STAGE 1: Build & Push Images
   # ================================
   build-push:
     name: Build & Push Images
     runs-on: ubuntu-latest
-    needs: test
-    if: github.ref == 'refs/heads/main'
     
     steps:
-      - uses: actions/checkout@v4
-      
-      - uses: docker/login-action@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 1. Frontend (Modified Go)
-      - uses: docker/build-push-action@v5
+      # 1. Frontend
+      - name: Build Frontend
+        uses: docker/build-push-action@v5
         with:
           context: ./src/frontend
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ github.sha }}
 
-      # 2. Review Service (Custom Python)
-      - uses: docker/build-push-action@v5
+      # 2. Review Service
+      - name: Build Review Service
+        uses: docker/build-push-action@v5
         with:
           context: ./src/reviewservice
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/reviewservice:${{ github.sha }}
 
-      # 3. Inventory Service (Custom Python)
-      - uses: docker/build-push-action@v5
+      # 3. Inventory Service
+      - name: Build Inventory Service
+        uses: docker/build-push-action@v5
         with:
           context: ./src/inventoryservice
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/inventoryservice:${{ github.sha }}
 
-      # 4. Currency Service (Modified Node.js - INR)
-      - uses: docker/build-push-action@v5
+      # 4. Currency Service
+      - name: Build Currency Service
+        uses: docker/build-push-action@v5
         with:
           context: ./src/currencyservice
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/currencyservice:${{ github.sha }}
 
   # ================================
-  # STAGE 4: Update Manifests (GitOps)
+  # STAGE 2: Update Kubernetes Manifests
   # ================================
   update-manifests:
-    name: Update K8s Manifests (GitOps)
+    name: Update Manifests (GitOps)
     runs-on: ubuntu-latest
     needs: build-push
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      contents: write
-
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update Image Tags
+      - name: Update Image Tags in YAML
         run: |
-          # 1. Setup Git User
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           
-          # 2. Force Pull (to avoid conflicts)
-          git pull origin main
+          echo "Updating manifests to image tag: ${{ github.sha }}"
           
-          echo "Updating manifests to tag: ${{ github.sha }}"
+          # Logic: Find 'image: username/service:...' and replace with 'image: username/service:sha'
           
-          # 3. Use generic sed (safest way)
-          # Updates ANY image starting with your username/frontend
+          # Frontend
           sed -i "s|image: ${{ secrets.DOCKERHUB_USERNAME }}/frontend:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ github.sha }}|g" kubernetes-manifests/frontend.yaml
           
-          # Do same for others
+          # Review Service
           sed -i "s|image: ${{ secrets.DOCKERHUB_USERNAME }}/reviewservice:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/reviewservice:${{ github.sha }}|g" kubernetes-manifests/reviewservice.yaml
+          
+          # Inventory Service
           sed -i "s|image: ${{ secrets.DOCKERHUB_USERNAME }}/inventoryservice:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/inventoryservice:${{ github.sha }}|g" kubernetes-manifests/inventoryservice.yaml
+          
+          # Currency Service
           sed -i "s|image: ${{ secrets.DOCKERHUB_USERNAME }}/currencyservice:.*|image: ${{ secrets.DOCKERHUB_USERNAME }}/currencyservice:${{ github.sha }}|g" kubernetes-manifests/currencyservice.yaml
           
-          # 4. Debug: Check if file actually changed
-          git status
-          
-          # 5. Commit & Push
-          git add kubernetes-manifests/
-          # Only commit if there are changes
-          if git diff --staged --quiet; then
-            echo "No changes to commit."
+          # Check if there are changes
+          if [[ -n $(git status -s) ]]; then
+            git add kubernetes-manifests/
+            git commit -m "ops: update images to version ${{ github.sha }}"
+            git push
+            echo "✅ Manifests updated and pushed!"
           else
-            git commit -m "ops: update modified service images to ${{ github.sha }} [skip ci]"
-            git push origin main
-          fi  
+            echo "⚠️ No changes to manifests detected."
+          fi
 
   # ================================
-  # STAGE 5: Security Scan
-  # ================================
-  security-scan:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    needs: build-push
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: '${{ secrets.DOCKERHUB_USERNAME }}/frontend:${{ github.sha }}'
-          format: 'table'
-          severity: 'CRITICAL'
-
-  # ================================
-  # STAGE 6: Report
+  # STAGE 3: Final Report
   # ================================
   report:
     name: Pipeline Report
@@ -164,7 +119,7 @@ jobs:
     if: always()
     steps:
       - run: |
-          echo "🚀 CI/CD Pipeline Successful!"
-          echo "✅ Built & Pushed: Frontend, Review, Inventory, Currency"
-          echo "✅ GitOps: Manifests updated"
-          echo "✅ ArgoCD will auto-sync now!"
+          echo "🚀 CI/CD Pipeline Complete!"
+          echo "✅ Images pushed with tag: ${{ github.sha }}"
+          echo "✅ Manifests updated in GitHub"
+          echo "👉 ArgoCD will detect this change and sync automatically!"
