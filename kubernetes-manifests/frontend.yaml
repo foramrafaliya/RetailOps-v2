@@ -44,7 +44,7 @@ spec:
                 - ALL
             privileged: false
             readOnlyRootFilesystem: true
-          image: foram06/frontend:04d9024e136428e2e0442644c39c4d9340885fb6
+          image: foram06/frontend:6e248a12233baf4601f606cd76cbad66b8f8f6e3
           imagePullPolicy: Always
 
           ports:
