@@ -1,0 +1,58 @@
+# Save as: alert-rules.yaml
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: retailops-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: retailops.rules
+      rules:
+
+        # ALERT 1: Pod is DOWN
+        - alert: PodDown
+          expr: kube_pod_status_phase{namespace="default", phase!="Running", phase!="Succeeded"} > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} is DOWN!"
+
+        # ALERT 2: High CPU
+        - alert: HighCPU
+          expr: sum(rate(container_cpu_usage_seconds_total{namespace="default", container!="POD", container!=""}[5m])) by (pod) > 0.5
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU on {{ $labels.pod }}"
+
+        # ALERT 3: High Memory (above 500MB)
+        - alert: HighMemory
+          expr: sum(container_memory_working_set_bytes{namespace="default", container!="POD", container!=""}) by (pod) > 500000000
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High Memory on {{ $labels.pod }}"
+
+        # ALERT 4: Pod Crash Looping
+        - alert: PodCrashLooping
+          expr: increase(kube_pod_container_status_restarts_total{namespace="default"}[10m]) > 3
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} is crash looping!"
+
+        # ALERT 5: Too Many Pods (HPA went crazy)
+        - alert: TooManyPods
+          expr: count(kube_pod_info{namespace="default"}) > 25
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Too many pods running - check HPA!"
